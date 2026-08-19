@@ -12,13 +12,14 @@ import java.util.Map;
 
 import static java.util.Arrays.asList;
 import static org.apache.commons.lang3.StringUtils.isNotEmpty;
+import static scot.gov.publications.hippo.Constants.HIPPO_NAME;
 
 /**
  * Creates nodes in the repository for given hippoPaths.
  */
 public class HippoPaths {
 
-    private static List<String> stopWords = new ArrayList<>();
+    private static final List<String> stopWords = new ArrayList<>();
 
     public static final String ROOT = "/content/documents/govscot/";
 
@@ -114,7 +115,7 @@ public class HippoPaths {
         node.addMixin("mix:versionable");
         node.addMixin("mix:simpleVersionable");
         node.addMixin("mix:lockable");
-        node.setProperty("hippo:name", name);
+        node.setProperty(HIPPO_NAME, name);
         parent.setProperty("hippostd:hasfolders", true);
         return node;
     }
@@ -130,20 +131,44 @@ public class HippoPaths {
         }
 
         String element = slugify(path.get(pos));
+        String displayName = displayNameForContentFolder(path, pos, element);
 
         Node next = parent.hasNode(element)
-                ? parent.getNode(element)
-                : imageFolderNode(parent, element);
+                ? applyDisplayName(parent.getNode(element), displayName)
+                : imageFolderNode(parent, element, displayName);
         int newPos = pos + 1;
         return ensureImagePathInternal(next, newPos, path);
     }
 
-    private Node imageFolderNode(Node parent, String name) throws RepositoryException {
-        String slug = slugify(name);
+    /**
+     * The elements of an image path are the actual node names of the mirrored content folder
+     * chain under {@value #ROOT}, so the display name for each gallery folder can be read
+     * straight off the corresponding content folder's own hippo:name, falling back to the raw
+     * path element if that folder has no name of its own.
+     */
+    private String displayNameForContentFolder(List<String> path, int pos, String fallback) throws RepositoryException {
+        String contentPath = ROOT + String.join("/", path.subList(0, pos + 1));
+        if (!session.nodeExists(contentPath)) {
+            return fallback;
+        }
+        Node contentNode = session.getNode(contentPath);
+        return contentNode.hasProperty(HIPPO_NAME)
+                ? contentNode.getProperty(HIPPO_NAME).getString()
+                : fallback;
+    }
+
+    private Node applyDisplayName(Node folder, String displayName) throws RepositoryException {
+        if (!folder.hasProperty(HIPPO_NAME) || !displayName.equals(folder.getProperty(HIPPO_NAME).getString())) {
+            folder.setProperty(HIPPO_NAME, displayName);
+        }
+        return folder;
+    }
+
+    private Node imageFolderNode(Node parent, String slug, String displayName) throws RepositoryException {
         Node node = parent.addNode(slug, "hippogallery:stdImageGallery");
         node.addMixin("hippo:named");
         node.addMixin("mix:referenceable");
-        node.setProperty("hippo:name", name);
+        node.setProperty(HIPPO_NAME, displayName);
         node.setProperty("hippostd:foldertype", new String [] { "new-image-folder"});
         node.setProperty("hippostd:gallerytype", new String [] {"hippogallery:imageset"});
         parent.setProperty("hippostd:hasfolders", true);
