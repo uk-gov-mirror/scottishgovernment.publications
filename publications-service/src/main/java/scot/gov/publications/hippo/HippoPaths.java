@@ -131,7 +131,7 @@ public class HippoPaths {
             return parent;
         }
 
-        String element = slugify(path.get(pos));
+        String element = slugify(path.get(pos), false);
         String displayName = displayNameForContentFolder(path, pos, element);
 
         Node next = parent.hasNode(element)
